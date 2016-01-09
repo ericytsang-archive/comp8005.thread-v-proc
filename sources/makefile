@@ -10,8 +10,11 @@ clean:
 
 
 # executables
-all: main.o FindFactorsTask.o
-	$(CC) -o ./main.out main.o FindFactorsTask.o $(LIBS)
+Processes-Main: Processes-Main.o FindFactorsTask.o
+	$(CC) -o ./Processes-Main.out Processes-Main.o FindFactorsTask.o $(LIBS)
+
+Threads-Main: Threads-Main.o FindFactorsTask.o
+	$(CC) -o ./Threads-Main.out Threads-Main.o FindFactorsTask.o $(LIBS)
 
 FindFactorsTaskTest: FindFactorsTaskTest.o FindFactorsTask.o Number.o
 	$(CC) -o ./FindFactorsTaskTest.out FindFactorsTaskTest.o FindFactorsTask.o Number.o $(LIBS)
@@ -20,8 +23,11 @@ NumberTest: NumberTest.o Number.o
 	$(CC) -o ./NumberTest.out NumberTest.o Number.o $(LIBS)
 
 # files
-main.o: main.cpp
-	$(CC) -c main.cpp
+Threads-Main.o: Threads-Main.cpp
+	$(CC) -c Threads-Main.cpp
+
+Processes-Main.o: Processes-Main.cpp
+	$(CC) -c Processes-Main.cpp
 
 FindFactorsTaskTest.o: FindFactorsTaskTest.cpp
 	$(CC) -c FindFactorsTaskTest.cpp
