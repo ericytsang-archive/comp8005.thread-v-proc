@@ -2,14 +2,17 @@
 #include <stdio.h>
 #include <pthread.h>
 #include <semaphore.h>
+#include <algorithm>
 #include "FindFactorsTask.h"
 #include "Number.h"
 #include "Lock.h"
+#include <sys/time.h>
 
 #define NUM_WORKERS 4
-#define MAX_PENDING_TASKS 900000
+#define MAX_PENDING_TASKS 1000
 #define MAX_NUMBERS_PER_TASK 10000
 
+long current_timestamp();
 void* worker_routine(void*);
 int main(int,char**);
 
@@ -51,6 +54,9 @@ int main(int argc,char** argv)
     params.taskAccessPtr = &taskAccess;
     params.resultAccessPtr = &resultAccess;
 
+    // get start time
+    long startTime = current_timestamp();
+
     // create the worker threads
     pthread_t workers[NUM_WORKERS];
     for(register unsigned int i = 0; i < NUM_WORKERS; ++i)
@@ -60,11 +66,23 @@ int main(int argc,char** argv)
 
     // create tasks and place them into the tasks vector
     {
+        Number prevPercentageComplete;
+        Number percentageComplete;
+        Number tempLoBound;
+
         Number loBound;
         for(mpz_set_ui(loBound.value,1);
             mpz_cmp(loBound.value,prime.value) <= 0;
             mpz_add_ui(loBound.value,loBound.value,MAX_NUMBERS_PER_TASK))
         {
+            mpz_set(prevPercentageComplete.value,percentageComplete.value);
+            mpz_mul_ui(tempLoBound.value,loBound.value,100);
+            mpz_div(percentageComplete.value,tempLoBound.value,prime.value);
+            if(mpz_cmp(prevPercentageComplete.value,percentageComplete.value) != 0)
+            {
+                gmp_printf("%Zd%\n",percentageComplete.value);
+            }
+
             // calculate the hiBound for a task
             Number hiBound;
             mpz_add_ui(hiBound.value,loBound.value,MAX_NUMBERS_PER_TASK-1);
@@ -101,6 +119,24 @@ int main(int argc,char** argv)
         void* unused;
         pthread_join(workers[i],&unused);
     }
+
+    // get end time
+    long endTime = current_timestamp();
+
+    // print out results
+    std::sort(results.begin(),results.end(),[](Number* i,Number* j)
+    {
+        return mpz_cmp(i->value,j->value) < 0;
+    });
+    printf("factors: ");
+    for(register unsigned int i = 0; i < results.size(); ++i)
+    {
+        gmp_printf("%s%Zd",i?", ":"",results[i]);
+    }
+    printf("\n");
+
+    // print out execution results
+    printf("total runtime: %lums\n",endTime-startTime);
 
     return 0;
 }
@@ -152,7 +188,6 @@ void* worker_routine(void* ptr)
                 Number* numPtr = new Number();
                 mpz_set(numPtr->value,*results->at(i));
                 params->resultsPtr->push_back(numPtr);
-                gmp_printf("result: %Zd\n",(void*) numPtr->value);   // todo: remove debug output
             }
         }
 
@@ -160,4 +195,11 @@ void* worker_routine(void* ptr)
     }
 
     pthread_exit(0);
+}
+
+long current_timestamp()
+{
+    struct timeval te;
+    gettimeofday(&te, NULL); // get current time
+    return te.tv_sec*1000L + te.tv_usec/1000; // caculate milliseconds
 }
