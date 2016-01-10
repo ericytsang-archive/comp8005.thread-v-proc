@@ -1,7 +1,7 @@
 #include <vector>
 #include <stdio.h>
 #include <pthread.h>
-#include <semaphore.h>
+#include "Semaphore.h"
 #include <algorithm>
 #include "FindFactorsTask.h"
 #include "Number.h"
@@ -13,6 +13,7 @@
 #define MAX_NUMBERS_PER_TASK 10000
 
 long current_timestamp();
+void produce_tasks(Number*,std::vector<FindFactorsTask*>*,Semaphore*);
 void* worker_routine(void*);
 int main(int,char**);
 
@@ -22,8 +23,8 @@ typedef struct
     std::vector<FindFactorsTask*>* tasksPtr;
     std::vector<Number*>* resultsPtr;
     bool* allTasksProducedPtr;
-    sem_t* taskAccessPtr;
-    sem_t* resultAccessPtr;
+    Semaphore* taskAccessPtr;
+    Semaphore* resultAccessPtr;
 }
 WorkerThreadParams;
 
@@ -39,12 +40,8 @@ int main(int argc,char** argv)
     std::vector<Number*> results;
     bool allTasksProduced = false;
 
-    sem_t taskAccess = {0};
-    sem_t resultAccess = {0};
-
-    sem_init(&taskAccess, 0, 1);
-    sem_init(&resultAccess, 0, 1);
-    // todo: create a thing used to store execution statistics
+    Semaphore taskAccess(false,1);
+    Semaphore resultAccess(false,1);
 
     // prepare worker thread parameters
     WorkerThreadParams params;
@@ -65,53 +62,8 @@ int main(int argc,char** argv)
     }
 
     // create tasks and place them into the tasks vector
-    {
-        Number prevPercentageComplete;
-        Number percentageComplete;
-        Number tempLoBound;
-
-        Number loBound;
-        for(mpz_set_ui(loBound.value,1);
-            mpz_cmp(loBound.value,prime.value) <= 0;
-            mpz_add_ui(loBound.value,loBound.value,MAX_NUMBERS_PER_TASK))
-        {
-            mpz_set(prevPercentageComplete.value,percentageComplete.value);
-            mpz_mul_ui(tempLoBound.value,loBound.value,100);
-            mpz_div(percentageComplete.value,tempLoBound.value,prime.value);
-            if(mpz_cmp(prevPercentageComplete.value,percentageComplete.value) != 0)
-            {
-                gmp_printf("%Zd%\n",percentageComplete.value);
-            }
-
-            // calculate the hiBound for a task
-            Number hiBound;
-            mpz_add_ui(hiBound.value,loBound.value,MAX_NUMBERS_PER_TASK-1);
-            if(mpz_cmp(hiBound.value,prime.value) > 0)
-            {
-                mpz_set(hiBound.value,prime.value);
-            }
-
-            // create the task
-            FindFactorsTask* newTask = new FindFactorsTask(prime.value,hiBound.value,loBound.value);
-
-            // insert the task into the task queue once there is room
-            while (true)
-            {
-                Lock scopelock(&taskAccess);
-
-                if(tasks.size() > MAX_PENDING_TASKS)
-                {
-                    pthread_yield();
-                    continue;
-                }
-
-                tasks.push_back(newTask);
-                break;
-            }
-        }
-
-        allTasksProduced = true;
-    }
+    produce_tasks(&prime,&tasks,&taskAccess);
+    allTasksProduced = true;
 
     // join all worker threads
     for(register unsigned int i = 0; i < NUM_WORKERS; ++i)
@@ -123,7 +75,7 @@ int main(int argc,char** argv)
     // get end time
     long endTime = current_timestamp();
 
-    // print out results
+    // print out calculation results
     std::sort(results.begin(),results.end(),[](Number* i,Number* j)
     {
         return mpz_cmp(i->value,j->value) < 0;
@@ -132,6 +84,7 @@ int main(int argc,char** argv)
     for(register unsigned int i = 0; i < results.size(); ++i)
     {
         gmp_printf("%s%Zd",i?", ":"",results[i]);
+        delete results[i];
     }
     printf("\n");
 
@@ -139,6 +92,54 @@ int main(int argc,char** argv)
     printf("total runtime: %lums\n",endTime-startTime);
 
     return 0;
+}
+
+void produce_tasks(Number* prime,std::vector<FindFactorsTask*>* tasks,Semaphore* taskAccess)
+{
+    Number prevPercentageComplete;
+    Number percentageComplete;
+    Number tempLoBound;
+    Number loBound;
+
+    for(mpz_set_ui(loBound.value,1);
+        mpz_cmp(loBound.value,prime->value) <= 0;
+        mpz_add_ui(loBound.value,loBound.value,MAX_NUMBERS_PER_TASK))
+    {
+        // calculate and print percentage complete
+        mpz_set(prevPercentageComplete.value,percentageComplete.value);
+        mpz_mul_ui(tempLoBound.value,loBound.value,100);
+        mpz_div(percentageComplete.value,tempLoBound.value,prime->value);
+        if(mpz_cmp(prevPercentageComplete.value,percentageComplete.value) != 0)
+        {
+            gmp_printf("%Zd%\n",percentageComplete.value);
+        }
+
+        // calculate the hiBound for a task
+        Number hiBound;
+        mpz_add_ui(hiBound.value,loBound.value,MAX_NUMBERS_PER_TASK-1);
+        if(mpz_cmp(hiBound.value,prime->value) > 0)
+        {
+            mpz_set(hiBound.value,prime->value);
+        }
+
+        // create the task
+        FindFactorsTask* newTask = new FindFactorsTask(prime->value,hiBound.value,loBound.value);
+
+        // insert the task into the task queue once there is room
+        while (true)
+        {
+            Lock scopelock(taskAccess);
+
+            if(tasks->size() > MAX_PENDING_TASKS)
+            {
+                pthread_yield();
+                continue;
+            }
+
+            tasks->push_back(newTask);
+            break;
+        }
+    }
 }
 
 void* worker_routine(void* ptr)

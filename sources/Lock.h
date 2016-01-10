@@ -1,23 +1,23 @@
 #ifndef LOCK_H
 #define LOCK_H
 
-#include <semaphore.h>
+#include "Semaphore.h"
 
 class Lock
 {
 public:
-    Lock(sem_t* _mutex):mutex(_mutex)
+    Lock(Semaphore* _sem):sem(_sem)
     {
-        sem_wait(mutex);
+        sem->wait();
     }
 
     ~Lock()
     {
-        sem_post(mutex);
+        sem->post();
     }
 
 private:
-    sem_t* mutex;
+    Semaphore* sem;
 };
 
 #endif
