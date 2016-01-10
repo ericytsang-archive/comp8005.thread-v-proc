@@ -25,18 +25,16 @@ void FindFactorsTask::execute()
 {
     // declare, allocate and initialize variables
     mpz_t factor;
-    mpz_t incrementInterval;
     mpz_t zero;
 
     mpz_init_set(factor,lowerBound);
-    mpz_init_set_ui(incrementInterval,1);
     mpz_init_set_ui(zero,0);
 
     // iterate through range and find all factors of testSubject within range
     // and put them into results.
     for(mpz_set(factor,lowerBound);
-        mpz_cmp(factor,upperBound) != 0;
-        mpz_add(factor,factor,incrementInterval))
+        mpz_cmp(factor,upperBound) <= 0;
+        mpz_add_ui(factor,factor,1))
     {
         mpz_t surplus;
         mpz_init(surplus);
@@ -54,7 +52,6 @@ void FindFactorsTask::execute()
 
     // delete variables
     mpz_clear(factor);
-    mpz_clear(incrementInterval);
     mpz_clear(zero);
 }
 

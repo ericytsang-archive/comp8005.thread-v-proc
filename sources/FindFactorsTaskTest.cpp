@@ -14,7 +14,7 @@ int main()
 
     mpz_set_ui(number.value,1000);
     mpz_set_ui(loMark.value,1);
-    mpz_set_ui(hiMark.value,1000);
+    mpz_set_ui(hiMark.value,999);
 
     // do test stuff...
     FindFactorsTask task(number.value,hiMark.value,loMark.value);
