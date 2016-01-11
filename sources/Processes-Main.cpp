@@ -38,6 +38,11 @@ FILE* feedbackIn = {0};
 int main(int argc,char** argv)
 {
     // parse command line arguments
+    if (argc != 2)
+    {
+        fprintf(stderr,"usage: %s [integer]\n",argv[0]);
+        return 1;
+    }
     mpz_set_str(prime.value,argv[1],10);
 
     // create all synchronization primitives, data structures needed to store
@@ -171,10 +176,10 @@ int main(int argc,char** argv)
     return 0;
 }
 
-void sigusr1_handler(int sigNum)
+void sigusr1_handler(int)
 {
     // read all results from feedback pipe, and put into results vector
-    pollfd pollParams = {0};
+    pollfd pollParams;
     pollParams.fd = feedback[0];
     pollParams.events = POLLIN;
 

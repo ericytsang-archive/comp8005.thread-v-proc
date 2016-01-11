@@ -13,47 +13,28 @@
 #define MAX_NUMBERS_PER_TASK 10000
 
 long current_timestamp();
-void produce_tasks(Number*,std::vector<Number*>*,Semaphore*,Semaphore*);
 void* worker_routine(void*);
 int main(int,char**);
 
-// create all data structures needed to store results, tasks, and execution statistics
-typedef struct
-{
-    std::vector<Number*>* tasksPtr;
-    std::vector<Number*>* resultsPtr;
-    bool* allTasksProducedPtr;
-    Semaphore* taskAccessPtr;
-    Semaphore* tasksNotFullSemPtr;
-    Semaphore* resultAccessPtr;
-}
-WorkerThreadParams;
-
 Number prime;
+
+std::vector<Number*> tasks;
+std::vector<Number*> results;
+bool allTasksProduced = false;
+
+Semaphore taskAccess(false,1);
+Semaphore tasksNotFullSem(false,MAX_PENDING_TASKS);
+Semaphore resultAccess(false,1);
 
 int main(int argc,char** argv)
 {
     // parse command line arguments
+    if (argc != 2)
+    {
+        fprintf(stderr,"usage: %s [integer]\n",argv[0]);
+        return 1;
+    }
     mpz_set_str(prime.value,argv[1],10);
-
-    // create all synchronization primitives, and data structures needed to
-    // store results, tasks, and execution statistics
-    std::vector<Number*> tasks;
-    std::vector<Number*> results;
-    bool allTasksProduced = false;
-
-    Semaphore taskAccess(false,1);
-    Semaphore tasksNotFullSem(false,MAX_PENDING_TASKS);
-    Semaphore resultAccess(false,1);
-
-    // prepare worker thread parameters
-    WorkerThreadParams params;
-    params.tasksPtr = &tasks;
-    params.resultsPtr = &results;
-    params.allTasksProducedPtr = &allTasksProduced;
-    params.taskAccessPtr = &taskAccess;
-    params.tasksNotFullSemPtr = &tasksNotFullSem;
-    params.resultAccessPtr = &resultAccess;
 
     // get start time
     long startTime = current_timestamp();
@@ -62,11 +43,37 @@ int main(int argc,char** argv)
     pthread_t workers[NUM_WORKERS];
     for(register unsigned int i = 0; i < NUM_WORKERS; ++i)
     {
-        pthread_create(workers+i,0,worker_routine,&params);
+        pthread_create(workers+i,0,worker_routine,0);
     }
 
     // create tasks and place them into the tasks vector
-    produce_tasks(&prime,&tasks,&taskAccess,&tasksNotFullSem);
+    {
+        Number prevPercentageComplete;
+        Number percentageComplete;
+        Number tempLoBound;
+        Number loBound;
+
+        for(mpz_set_ui(loBound.value,1);
+            mpz_cmp(loBound.value,prime.value) <= 0;
+            mpz_add_ui(loBound.value,loBound.value,MAX_NUMBERS_PER_TASK))
+        {
+            // calculate and print percentage complete
+            mpz_set(prevPercentageComplete.value,percentageComplete.value);
+            mpz_mul_ui(tempLoBound.value,loBound.value,100);
+            mpz_div(percentageComplete.value,tempLoBound.value,prime.value);
+            if(mpz_cmp(prevPercentageComplete.value,percentageComplete.value) != 0)
+            {
+                gmp_printf("%Zd%\n",percentageComplete.value);
+            }
+
+            // insert the task into the task queue once there is room
+            Number* newNum = new Number();
+            mpz_set(newNum->value,loBound.value);
+            tasksNotFullSem.wait();
+            Lock scopelock(&taskAccess.sem);
+            tasks.push_back(newNum);
+        }
+    }
     allTasksProduced = true;
 
     // join all worker threads
@@ -98,38 +105,8 @@ int main(int argc,char** argv)
     return 0;
 }
 
-void produce_tasks(Number* prime,std::vector<Number*>* tasks,Semaphore* taskAccessPtr,Semaphore* tasksNotFullSemPtr)
+void* worker_routine(void*)
 {
-    Number prevPercentageComplete;
-    Number percentageComplete;
-    Number tempLoBound;
-    Number loBound;
-
-    for(mpz_set_ui(loBound.value,1);
-        mpz_cmp(loBound.value,prime->value) <= 0;
-        mpz_add_ui(loBound.value,loBound.value,MAX_NUMBERS_PER_TASK))
-    {
-        // calculate and print percentage complete
-        mpz_set(prevPercentageComplete.value,percentageComplete.value);
-        mpz_mul_ui(tempLoBound.value,loBound.value,100);
-        mpz_div(percentageComplete.value,tempLoBound.value,prime->value);
-        if(mpz_cmp(prevPercentageComplete.value,percentageComplete.value) != 0)
-        {
-            gmp_printf("%Zd%\n",percentageComplete.value);
-        }
-
-        // insert the task into the task queue once there is room
-        tasksNotFullSemPtr->wait();
-        Lock scopelock(&taskAccessPtr->sem);
-        Number* newNum = new Number();
-        mpz_set(newNum->value,loBound.value);
-        tasks->push_back(newNum);
-    }
-}
-
-void* worker_routine(void* ptr)
-{
-    WorkerThreadParams* params = (WorkerThreadParams*) ptr;
     bool yield = false;
 
     while(true)
@@ -143,18 +120,18 @@ void* worker_routine(void* ptr)
 
         // get the next task that needs processing
         {
-            Lock scopelock(&params->taskAccessPtr->sem);
+            Lock scopelock(&taskAccess.sem);
 
             // if there are tasks available to get, get them
-            if(!params->tasksPtr->empty())
+            if(!tasks.empty())
             {
-                loBoundPtr = params->tasksPtr->back();
-                params->tasksPtr->pop_back();
+                loBoundPtr = tasks.back();
+                tasks.pop_back();
             }
 
             // otherwise, if there are tasks available in the future, wait for
             // them to be available
-            else if(!*params->allTasksProducedPtr)
+            else if(!allTasksProduced)
             {
                 yield = true;
                 continue;
@@ -166,7 +143,7 @@ void* worker_routine(void* ptr)
                 break;
             }
         }
-        params->tasksNotFullSemPtr->post();
+        tasksNotFullSem.post();
 
         // calculate the hiBound for a task
         Number hiBound;
@@ -184,14 +161,14 @@ void* worker_routine(void* ptr)
 
         // post results of the tasks
         {
-            Lock scopelock(&params->resultAccessPtr->sem);
+            Lock scopelock(&resultAccess.sem);
 
-            std::vector<mpz_t*>* results = newTask.get_results();
-            for(register unsigned int i = 0; i < results->size(); ++i)
+            std::vector<mpz_t*>* taskResults = newTask.get_results();
+            for(register unsigned int i = 0; i < taskResults->size(); ++i)
             {
                 Number* numPtr = new Number();
-                mpz_set(numPtr->value,*results->at(i));
-                params->resultsPtr->push_back(numPtr);
+                mpz_set(numPtr->value,*taskResults->at(i));
+                results.push_back(numPtr);
             }
         }
 
