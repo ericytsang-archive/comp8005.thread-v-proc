@@ -13,14 +13,14 @@
 #define MAX_NUMBERS_PER_TASK 10000
 
 long current_timestamp();
-void produce_tasks(Number*,std::vector<FindFactorsTask*>*,Semaphore*,Semaphore*);
+void produce_tasks(Number*,std::vector<Number*>*,Semaphore*,Semaphore*);
 void* worker_routine(void*);
 int main(int,char**);
 
 // create all data structures needed to store results, tasks, and execution statistics
 typedef struct
 {
-    std::vector<FindFactorsTask*>* tasksPtr;
+    std::vector<Number*>* tasksPtr;
     std::vector<Number*>* resultsPtr;
     bool* allTasksProducedPtr;
     Semaphore* taskAccessPtr;
@@ -29,15 +29,16 @@ typedef struct
 }
 WorkerThreadParams;
 
+Number prime;
+
 int main(int argc,char** argv)
 {
     // parse command line arguments
-    Number prime;
     mpz_set_str(prime.value,argv[1],10);
 
     // create all synchronization primitives, and data structures needed to
     // store results, tasks, and execution statistics
-    std::vector<FindFactorsTask*> tasks;
+    std::vector<Number*> tasks;
     std::vector<Number*> results;
     bool allTasksProduced = false;
 
@@ -97,7 +98,7 @@ int main(int argc,char** argv)
     return 0;
 }
 
-void produce_tasks(Number* prime,std::vector<FindFactorsTask*>* tasks,Semaphore* taskAccessPtr,Semaphore* tasksNotFullSemPtr)
+void produce_tasks(Number* prime,std::vector<Number*>* tasks,Semaphore* taskAccessPtr,Semaphore* tasksNotFullSemPtr)
 {
     Number prevPercentageComplete;
     Number percentageComplete;
@@ -117,21 +118,12 @@ void produce_tasks(Number* prime,std::vector<FindFactorsTask*>* tasks,Semaphore*
             gmp_printf("%Zd%\n",percentageComplete.value);
         }
 
-        // calculate the hiBound for a task
-        Number hiBound;
-        mpz_add_ui(hiBound.value,loBound.value,MAX_NUMBERS_PER_TASK-1);
-        if(mpz_cmp(hiBound.value,prime->value) > 0)
-        {
-            mpz_set(hiBound.value,prime->value);
-        }
-
-        // create the task
-        FindFactorsTask* newTask = new FindFactorsTask(prime->value,hiBound.value,loBound.value);
-
         // insert the task into the task queue once there is room
         tasksNotFullSemPtr->wait();
         Lock scopelock(&taskAccessPtr->sem);
-        tasks->push_back(newTask);
+        Number* newNum = new Number();
+        mpz_set(newNum->value,loBound.value);
+        tasks->push_back(newNum);
     }
 }
 
@@ -147,7 +139,7 @@ void* worker_routine(void* ptr)
             pthread_yield();
             yield = false;
         }
-        FindFactorsTask* taskPtr;
+        Number* loBoundPtr;
 
         // get the next task that needs processing
         {
@@ -156,7 +148,7 @@ void* worker_routine(void* ptr)
             // if there are tasks available to get, get them
             if(!params->tasksPtr->empty())
             {
-                taskPtr = params->tasksPtr->back();
+                loBoundPtr = params->tasksPtr->back();
                 params->tasksPtr->pop_back();
             }
 
@@ -176,14 +168,25 @@ void* worker_routine(void* ptr)
         }
         params->tasksNotFullSemPtr->post();
 
+        // calculate the hiBound for a task
+        Number hiBound;
+        mpz_add_ui(hiBound.value,loBoundPtr->value,MAX_NUMBERS_PER_TASK-1);
+        if(mpz_cmp(hiBound.value,prime.value) > 0)
+        {
+            mpz_set(hiBound.value,prime.value);
+        }
+
+        // create the task
+        FindFactorsTask newTask(prime.value,hiBound.value,loBoundPtr->value);
+
         // do the processing
-        taskPtr->execute();
+        newTask.execute();
 
         // post results of the tasks
         {
             Lock scopelock(&params->resultAccessPtr->sem);
 
-            std::vector<mpz_t*>* results = taskPtr->get_results();
+            std::vector<mpz_t*>* results = newTask.get_results();
             for(register unsigned int i = 0; i < results->size(); ++i)
             {
                 Number* numPtr = new Number();
@@ -192,7 +195,7 @@ void* worker_routine(void* ptr)
             }
         }
 
-        delete taskPtr;
+        delete loBoundPtr;
     }
 
     pthread_exit(0);
