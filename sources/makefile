@@ -10,8 +10,8 @@ clean:
 
 
 # executables
-Processes-Main: Processes-Main.o FindFactorsTask.o
-	$(CC) -o ./Processes-Main.out Processes-Main.o FindFactorsTask.o $(LIBS)
+Processes-Main: Processes-Main.o FindFactorsTask.o Number.o
+	$(CC) -o ./Processes-Main.out Processes-Main.o FindFactorsTask.o Number.o $(LIBS)
 
 Threads-Main: Threads-Main.o FindFactorsTask.o Number.o
 	$(CC) -o ./Threads-Main.out Threads-Main.o FindFactorsTask.o Number.o $(LIBS)

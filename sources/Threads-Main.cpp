@@ -1,12 +1,12 @@
 #include <vector>
 #include <stdio.h>
 #include <pthread.h>
-#include "Semaphore.h"
 #include <algorithm>
-#include "FindFactorsTask.h"
-#include "Number.h"
-#include "Lock.h"
 #include <sys/time.h>
+#include "Lock.h"
+#include "Number.h"
+#include "Semaphore.h"
+#include "FindFactorsTask.h"
 
 #define NUM_WORKERS 4
 #define MAX_PENDING_TASKS 1000
@@ -34,8 +34,8 @@ int main(int argc,char** argv)
     Number prime;
     mpz_set_str(prime.value,argv[1],10);
 
-    // create all data structures needed to store results, tasks, and execution
-    // statistics
+    // create all synchronization primitives, and data structures needed to
+    // store results, tasks, and execution statistics
     std::vector<FindFactorsTask*> tasks;
     std::vector<Number*> results;
     bool allTasksProduced = false;
@@ -128,7 +128,7 @@ void produce_tasks(Number* prime,std::vector<FindFactorsTask*>* tasks,Semaphore*
         // insert the task into the task queue once there is room
         while (true)
         {
-            Lock scopelock(taskAccess);
+            Lock scopelock(&taskAccess->sem);
 
             if(tasks->size() > MAX_PENDING_TASKS)
             {
@@ -152,7 +152,7 @@ void* worker_routine(void* ptr)
 
         // get the next task that needs processing
         {
-            Lock scopelock(params->taskAccessPtr);
+            Lock scopelock(&params->taskAccessPtr->sem);
 
             // if there are tasks available to do, do them
             if(!params->tasksPtr->empty())
@@ -181,7 +181,7 @@ void* worker_routine(void* ptr)
 
         // post results of the tasks
         {
-            Lock scopelock(params->resultAccessPtr);
+            Lock scopelock(&params->resultAccessPtr->sem);
 
             std::vector<mpz_t*>* results = taskPtr->get_results();
             for(register unsigned int i = 0; i < results->size(); ++i)

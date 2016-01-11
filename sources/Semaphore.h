@@ -9,27 +9,25 @@ public:
 
     Semaphore(bool betweenProcesses,int permits)
     {
-        sem_init(&semaphore,betweenProcesses?1:0,permits);
+        sem_init(&sem,betweenProcesses?1:0,permits);
     }
 
     ~Semaphore()
     {
-        sem_destroy(&semaphore);
+        sem_destroy(&sem);
     }
 
     void post()
     {
-        sem_post(&semaphore);
+        sem_post(&sem);
     }
 
     void wait()
     {
-        sem_wait(&semaphore);
+        sem_wait(&sem);
     }
 
-private:
-
-    sem_t semaphore;
+    sem_t sem;
 };
 
 #endif
