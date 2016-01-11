@@ -1,6 +1,6 @@
 
 CC = g++ -Wall -W -Wextra -pedantic -g -std=c++11
-LIBS = -lgmp -lpthread
+LIBS = -lgmp -lpthread -pthread
 
 
 

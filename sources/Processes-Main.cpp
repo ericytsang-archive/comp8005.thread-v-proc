@@ -1,3 +1,4 @@
+#include <poll.h>
 #include <errno.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -5,6 +6,7 @@
 #include <algorithm>
 #include <sys/wait.h>
 #include <sys/time.h>
+#include <sys/mman.h>
 #include <sys/types.h>
 #include "Lock.h"
 #include "Number.h"
@@ -26,11 +28,12 @@ std::vector<Number*> results;
 int tasks[2];
 int feedback[2];
 
+sem_t* tasksLock = 0;
+sem_t* tasksNotFullSem = 0;
+sem_t* feedbackLock = 0;
+
 FILE* taskOut = {0};
 FILE* feedbackIn = {0};
-
-sem_t tasksLock = {0};
-sem_t feedbackLock = {0};
 
 int main(int argc,char** argv)
 {
@@ -39,14 +42,31 @@ int main(int argc,char** argv)
 
     // create all synchronization primitives, data structures needed to store
     // results, tasks, and execution statistics
-    if(pipe(tasks) < 0 || pipe(feedback) < 0)
+    if (pipe(tasks) < 0 || pipe(feedback) < 0)
     {
         perror("failed to create pipe");
         return 1;
     }
 
-    sem_init(&tasksLock,1,1);
-    sem_init(&feedbackLock,1,1);
+    tasksLock = (sem_t*) mmap(0,sizeof(sem_t),PROT_READ|PROT_WRITE,MAP_SHARED|MAP_ANONYMOUS,-1,0);
+    tasksNotFullSem = (sem_t*) mmap(0,sizeof(sem_t),PROT_READ|PROT_WRITE,MAP_SHARED|MAP_ANONYMOUS,-1,0);
+    feedbackLock = (sem_t*) mmap(0,sizeof(sem_t),PROT_READ|PROT_WRITE,MAP_SHARED|MAP_ANONYMOUS,-1,0);
+
+    if (tasksLock == MAP_FAILED ||
+        tasksNotFullSem == MAP_FAILED ||
+        feedbackLock == MAP_FAILED)
+    {
+        perror("mmap");
+        return 1;
+    }
+
+    if (sem_init(tasksLock,1,1) < 0 ||
+        sem_init(tasksNotFullSem,1,NUM_WORKERS*10) < 0 ||
+        sem_init(feedbackLock,1,1) < 0)
+    {
+        perror("sem_init");
+        return 1;
+    }
 
     // get start time
     long startTime = current_timestamp();
@@ -54,7 +74,7 @@ int main(int argc,char** argv)
     // create the worker processes
     for(register unsigned int i = 0; i < NUM_WORKERS; ++i)
     {
-        if(!fork())
+        if (!fork())
         {
             return worker_process();
         }
@@ -64,22 +84,18 @@ int main(int argc,char** argv)
     close(tasks[0]);
     close(feedback[1]);
 
-    // get stream references to file descriptors
-    if((taskOut = fdopen(tasks[1],"w")) == 0)
-    {
-        fprintf(stderr,"failed on fdopen for taskOut for fd %d: ",tasks[1]);
-        perror("");
-        return 1;
-    }
-    if((feedbackIn = fdopen(feedback[0],"r")) == 0)
-    {
-        fprintf(stderr,"failed on fdopen for feedbackIn for fd %d: ",feedback[0]);
-        perror("");
-        return 1;
-    }
-
     // setup signal handlers
     signal(SIGUSR1,sigusr1_handler);
+
+    // get stream references to file descriptors
+    taskOut = fdopen(tasks[1],"w");
+    feedbackIn = fdopen(feedback[0],"r");
+
+    if (taskOut == 0 || feedbackIn == 0)
+    {
+        perror("failed on fdopen");
+        return 1;
+    }
 
     // create tasks and place them into the tasks pipe
     {
@@ -92,21 +108,25 @@ int main(int argc,char** argv)
             mpz_cmp(loBound.value,prime.value) <= 0;
             mpz_add_ui(loBound.value,loBound.value,MAX_NUMBERS_PER_TASK))
         {
+            // calculate and print percentage complete
             mpz_set(prevPercentageComplete.value,percentageComplete.value);
             mpz_mul_ui(tempLoBound.value,loBound.value,100);
             mpz_div(percentageComplete.value,tempLoBound.value,prime.value);
-            if(mpz_cmp(prevPercentageComplete.value,percentageComplete.value) != 0)
+            if (mpz_cmp(prevPercentageComplete.value,percentageComplete.value) != 0)
             {
-                gmp_printf("%Zd%\n",percentageComplete.value);
+                gmp_fprintf(stderr,"%Zd%\n",percentageComplete.value);
             }
 
             // write the loBound into the task pipe
-            if(!mpz_out_raw(taskOut,loBound.value))
+            sem_wait(tasksNotFullSem);
             {
-                perror("failed to write to pipe");
-                return 1;
+                if (!mpz_out_raw(taskOut,loBound.value))
+                {
+                    perror("failed to write to pipe");
+                    return 1;
+                }
+                fflush(taskOut);
             }
-            fflush(taskOut);
         }
 
         close(tasks[1]);
@@ -122,23 +142,15 @@ int main(int argc,char** argv)
     long endTime = current_timestamp();
 
     // clean up system resources
-    sem_destroy(&tasksLock);
-    sem_destroy(&feedbackLock);
+    sem_destroy(tasksLock);
+    sem_destroy(tasksNotFullSem);
+    sem_destroy(feedbackLock);
 
-    // read in all the results
-    while (true)
-    {
-        // read a result from feedback pipe, and put it into the results vector
-        Number* result = new Number();
-        if(!mpz_inp_raw(result->value,feedbackIn))
-        {
-            errno = 1;
-            perror("failed to read from pipe");
-            break;
-        }
+    munmap(tasksLock,sizeof(sem_t));
+    munmap(tasksNotFullSem,sizeof(sem_t));
+    munmap(feedbackLock,sizeof(sem_t));
 
-        results.push_back(result);
-    }
+    close(feedback[0]);
 
     // print out calculation results
     std::sort(results.begin(),results.end(),[](Number* i,Number* j)
@@ -152,7 +164,6 @@ int main(int argc,char** argv)
         delete results[i];
     }
     printf("\n");
-    close(feedback[0]);
 
     // print out execution results
     printf("total runtime: %lums\n",endTime-startTime);
@@ -162,15 +173,21 @@ int main(int argc,char** argv)
 
 void sigusr1_handler(int sigNum)
 {
-    // // read a result from feedback pipe, and put it into the results vector
-    // Number* result = new Number();
-    // if(!mpz_inp_raw(result->value,feedbackIn))
-    // {
-    //     errno = 1;
-    //     perror("failed to read from pipe");
-    // }
+    // read all results from feedback pipe, and put into results vector
+    pollfd pollParams = {0};
+    pollParams.fd = feedback[0];
+    pollParams.events = POLLIN;
 
-    // results.push_back(result);
+    while(poll(&pollParams,1,0) == 1)
+    {
+        Number* result = new Number();
+        if (!mpz_inp_raw(result->value,feedbackIn))
+        {
+            perror("failed on read");
+        }
+
+        results.push_back(result);
+    }
 }
 
 int worker_process()
@@ -182,7 +199,8 @@ int worker_process()
     // get stream references to file descriptors
     FILE* taskIn = fdopen(tasks[0],"r");
     FILE* feedbackOut = fdopen(feedback[1],"w");
-    if(taskIn == 0 || feedbackOut == 0)
+
+    if (taskIn == 0 || feedbackOut == 0)
     {
         perror("failed on fdopen");
         return 1;
@@ -195,26 +213,29 @@ int worker_process()
 
         // get the next task that needs processing
         {
-            Lock scopelock(&tasksLock);
-
             // read data from the task pipe needed to create a task
             Number loBound;
-            if(!mpz_inp_raw(loBound.value,taskIn))
             {
-                errno = 1;
-                perror("failed to read from pipe");
-                return 1;
+                Lock scopelock(tasksLock);
+
+                if (!mpz_inp_raw(loBound.value,taskIn))
+                {
+                    sem_post(tasksNotFullSem);
+                    return 0;
+                }
             }
+            sem_post(tasksNotFullSem);
 
             // calculate the hiBound from the loBound for the task
             Number hiBound;
             mpz_add_ui(hiBound.value,loBound.value,MAX_NUMBERS_PER_TASK-1);
-            if(mpz_cmp(hiBound.value,prime.value) > 0)
+            if (mpz_cmp(hiBound.value,prime.value) > 0)
             {
                 mpz_set(hiBound.value,prime.value);
             }
 
             // create the task
+            // gmp_printf("prime.value: %Zd, hiBound.value: %Zd, loBound.value: %Zd\n",prime.value,hiBound.value,loBound.value);
             taskPtr = new FindFactorsTask(prime.value,hiBound.value,loBound.value);
         }
 
@@ -223,19 +244,19 @@ int worker_process()
 
         // post results of the tasks
         {
-            Lock scopelock(&feedbackLock);
+            Lock scopelock(feedbackLock);
 
             std::vector<mpz_t*>* results = taskPtr->get_results();
             for(register unsigned int i = 0; i < results->size(); ++i)
             {
-                if(!mpz_out_raw(feedbackOut,*results->at(i)))
+                if (!mpz_out_raw(feedbackOut,*results->at(i)))
                 {
                     perror("failed to write to pipe");
                     return 1;
                 }
-                fflush(feedbackOut);
-                kill(getppid(),SIGUSR1);
             }
+            fflush(feedbackOut);
+            kill(getppid(),SIGUSR1);
         }
 
         delete taskPtr;

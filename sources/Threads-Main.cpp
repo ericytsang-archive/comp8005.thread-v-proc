@@ -9,11 +9,11 @@
 #include "FindFactorsTask.h"
 
 #define NUM_WORKERS 4
-#define MAX_PENDING_TASKS 1000
+#define MAX_PENDING_TASKS 100
 #define MAX_NUMBERS_PER_TASK 10000
 
 long current_timestamp();
-void produce_tasks(Number*,std::vector<FindFactorsTask*>*,Semaphore*);
+void produce_tasks(Number*,std::vector<FindFactorsTask*>*,Semaphore*,Semaphore*);
 void* worker_routine(void*);
 int main(int,char**);
 
@@ -24,6 +24,7 @@ typedef struct
     std::vector<Number*>* resultsPtr;
     bool* allTasksProducedPtr;
     Semaphore* taskAccessPtr;
+    Semaphore* tasksNotFullSemPtr;
     Semaphore* resultAccessPtr;
 }
 WorkerThreadParams;
@@ -41,6 +42,7 @@ int main(int argc,char** argv)
     bool allTasksProduced = false;
 
     Semaphore taskAccess(false,1);
+    Semaphore tasksNotFullSem(false,MAX_PENDING_TASKS);
     Semaphore resultAccess(false,1);
 
     // prepare worker thread parameters
@@ -49,6 +51,7 @@ int main(int argc,char** argv)
     params.resultsPtr = &results;
     params.allTasksProducedPtr = &allTasksProduced;
     params.taskAccessPtr = &taskAccess;
+    params.tasksNotFullSemPtr = &tasksNotFullSem;
     params.resultAccessPtr = &resultAccess;
 
     // get start time
@@ -62,7 +65,7 @@ int main(int argc,char** argv)
     }
 
     // create tasks and place them into the tasks vector
-    produce_tasks(&prime,&tasks,&taskAccess);
+    produce_tasks(&prime,&tasks,&taskAccess,&tasksNotFullSem);
     allTasksProduced = true;
 
     // join all worker threads
@@ -94,7 +97,7 @@ int main(int argc,char** argv)
     return 0;
 }
 
-void produce_tasks(Number* prime,std::vector<FindFactorsTask*>* tasks,Semaphore* taskAccess)
+void produce_tasks(Number* prime,std::vector<FindFactorsTask*>* tasks,Semaphore* taskAccessPtr,Semaphore* tasksNotFullSemPtr)
 {
     Number prevPercentageComplete;
     Number percentageComplete;
@@ -126,35 +129,31 @@ void produce_tasks(Number* prime,std::vector<FindFactorsTask*>* tasks,Semaphore*
         FindFactorsTask* newTask = new FindFactorsTask(prime->value,hiBound.value,loBound.value);
 
         // insert the task into the task queue once there is room
-        while (true)
-        {
-            Lock scopelock(&taskAccess->sem);
-
-            if(tasks->size() > MAX_PENDING_TASKS)
-            {
-                pthread_yield();
-                continue;
-            }
-
-            tasks->push_back(newTask);
-            break;
-        }
+        tasksNotFullSemPtr->wait();
+        Lock scopelock(&taskAccessPtr->sem);
+        tasks->push_back(newTask);
     }
 }
 
 void* worker_routine(void* ptr)
 {
     WorkerThreadParams* params = (WorkerThreadParams*) ptr;
+    bool yield = false;
 
     while(true)
     {
+        if (yield)
+        {
+            pthread_yield();
+            yield = false;
+        }
         FindFactorsTask* taskPtr;
 
         // get the next task that needs processing
         {
             Lock scopelock(&params->taskAccessPtr->sem);
 
-            // if there are tasks available to do, do them
+            // if there are tasks available to get, get them
             if(!params->tasksPtr->empty())
             {
                 taskPtr = params->tasksPtr->back();
@@ -165,7 +164,7 @@ void* worker_routine(void* ptr)
             // them to be available
             else if(!*params->allTasksProducedPtr)
             {
-                pthread_yield();
+                yield = true;
                 continue;
             }
 
@@ -175,6 +174,7 @@ void* worker_routine(void* ptr)
                 break;
             }
         }
+        params->tasksNotFullSemPtr->post();
 
         // do the processing
         taskPtr->execute();
