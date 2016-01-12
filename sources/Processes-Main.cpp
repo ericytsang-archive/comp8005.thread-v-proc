@@ -124,14 +124,12 @@ int main(int argc,char** argv)
 
             // write the loBound into the task pipe
             sem_wait(tasksNotFullSem);
+            if (!mpz_out_raw(taskOut,loBound.value))
             {
-                if (!mpz_out_raw(taskOut,loBound.value))
-                {
-                    perror("failed to write to pipe");
-                    return 1;
-                }
-                fflush(taskOut);
+                perror("failed to write to pipe");
+                return 1;
             }
+            fflush(taskOut);
         }
 
         close(tasks[1]);
@@ -145,6 +143,9 @@ int main(int argc,char** argv)
 
     // get end time
     long endTime = current_timestamp();
+
+    // read in any remaining results
+    sigusr1_handler(SIGUSR1);
 
     // clean up system resources
     sem_destroy(tasksLock);
@@ -188,7 +189,8 @@ void sigusr1_handler(int)
         Number* result = new Number();
         if (!mpz_inp_raw(result->value,feedbackIn))
         {
-            perror("failed on read");
+            if (errno) perror("failed on read");
+            break;
         }
 
         results.push_back(result);
@@ -240,7 +242,7 @@ int worker_process()
             }
 
             // create the task
-            // gmp_printf("prime.value: %Zd, hiBound.value: %Zd, loBound.value: %Zd\n",prime.value,hiBound.value,loBound.value);
+            gmp_printf("prime.value: %Zd, hiBound.value: %Zd, loBound.value: %Zd\n",prime.value,hiBound.value,loBound.value);
             taskPtr = new FindFactorsTask(prime.value,hiBound.value,loBound.value);
         }
 
