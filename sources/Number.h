@@ -6,8 +6,17 @@
 class Number
 {
 public:
-    Number();
-    ~Number();
+
+    Number()
+    {
+        mpz_init(value);
+    }
+
+    ~Number()
+    {
+        mpz_clear(value);
+    }
+
     mpz_t value;
 };
 

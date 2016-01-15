@@ -242,7 +242,6 @@ int worker_process()
             }
 
             // create the task
-            gmp_printf("prime.value: %Zd, hiBound.value: %Zd, loBound.value: %Zd\n",prime.value,hiBound.value,loBound.value);
             taskPtr = new FindFactorsTask(prime.value,hiBound.value,loBound.value);
         }
 
