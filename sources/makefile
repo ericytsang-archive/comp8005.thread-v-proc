@@ -34,3 +34,12 @@ FindFactorsTaskTest.o: FindFactorsTaskTest.cpp
 
 FindFactorsTask.o: FindFactorsTask.cpp
 	$(CC) -c FindFactorsTask.cpp
+
+Semaphore.o: Semaphore.cpp
+	$(CC) -c Semaphore.cpp
+
+Number.o: Number.cpp
+	$(CC) -c Number.cpp
+
+Lock.o: Lock.cpp
+	$(CC) -c Lock.cpp

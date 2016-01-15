@@ -7,26 +7,10 @@ class Semaphore
 {
 public:
 
-    Semaphore(bool betweenProcesses,int permits)
-    {
-        sem_init(&sem,betweenProcesses?1:0,permits);
-    }
-
-    ~Semaphore()
-    {
-        sem_destroy(&sem);
-    }
-
-    void post()
-    {
-        sem_post(&sem);
-    }
-
-    void wait()
-    {
-        sem_wait(&sem);
-    }
-
+    Semaphore(bool betweenProcesses,int permits);
+    ~Semaphore();
+    void post();
+    void wait();
     sem_t sem;
 };
 

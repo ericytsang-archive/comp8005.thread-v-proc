@@ -6,15 +6,8 @@
 class Lock
 {
 public:
-    Lock(sem_t* _sem):sem(_sem)
-    {
-        sem_wait(sem);
-    }
-
-    ~Lock()
-    {
-        sem_post(sem);
-    }
+    Lock(sem_t* _sem);
+    ~Lock();
 
 private:
     sem_t* sem;
