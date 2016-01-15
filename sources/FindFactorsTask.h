@@ -1,13 +1,29 @@
-//
-// Created by etsang on 08/01/16.
-//
-
+/**
+ * header file for the FindFactorsTask class. implementation is in
+ *   FindFactorsTask.cpp
+ *
+ * @sourceFile FindFactorsTask.h
+ *
+ * @program    Threads-Main.out, Processes-Main.out
+ *
+ * @class      FindFactorsTask
+ *
+ * @date       2016-01-15
+ *
+ * @revision   none
+ *
+ * @designer   Eric Tsang
+ *
+ * @programmer Eric Tsang
+ *
+ * @note       this class encapsulates a long-running task, or sub-task that
+ *   should be executed on a worker thread or process.
+ */
 #ifndef FINDFACTORSTASK_H
 #define FINDFACTORSTASK_H
 
 #include <gmp.h>
 #include <vector>
-
 
 class FindFactorsTask
 {

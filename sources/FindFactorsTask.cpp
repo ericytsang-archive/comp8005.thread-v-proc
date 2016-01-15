@@ -1,6 +1,59 @@
+/**
+ * implementation of the FindFactorsTask class declared in FindFactorsTask.h
+ *
+ * @sourceFile FindFactorsTask.cpp
+ *
+ * @program    Threads-Main.out, Processes-Main.out
+ *
+ * @class      FindFactorsTask
+ *
+ * @date       2016-01-15
+ *
+ * @revision   none
+ *
+ * @designer   Eric Tsang
+ *
+ * @programmer Eric Tsang
+ *
+ * @note
+ *
+ * when this object is constructed, its results vector is empty.
+ *
+ * the execute method should only be called once per instance. after the execute
+ *   method returns, the results of this object will be populated with factors
+ *   of the passed number in the range it was to check.
+ *
+ * when this object is destroyed, all the objects in its results vector are also
+ *   destroyed.
+ */
 #include "FindFactorsTask.h"
 #include <stdlib.h>
 
+/**
+ * constructor for the FindFactorsTask class.
+ *
+ * @class      FindFactorsTask
+ *
+ * @method     FindFactorsTask
+ *
+ * @date       2016-01-15
+ *
+ * @revision   none
+ *
+ * @designer   Eric Tsang
+ *
+ * @programmer Eric Tsang
+ *
+ * @note       none
+ *
+ * @signature  FindFactorsTask::FindFactorsTask(mpz_t _testSubject,mpz_t _upperBound,mpz_t _lowerBound)
+ *
+ * @param      _testSubject number to find factors for.
+ * @param      _upperBound lower bound of the range to check for factors.
+ * @param      _lowerBound upper bound of the range to check for factors.
+ *
+ * @return     an instance of FindFactorsTask.
+ */
 FindFactorsTask::FindFactorsTask(mpz_t _testSubject,mpz_t _upperBound,mpz_t _lowerBound)
 {
     mpz_init_set(upperBound,_upperBound);
@@ -8,6 +61,28 @@ FindFactorsTask::FindFactorsTask(mpz_t _testSubject,mpz_t _upperBound,mpz_t _low
     mpz_init_set(testSubject,_testSubject);
 }
 
+/**
+ * destructor for the FindFactorsTask class.
+ *
+ * @class      FindFactorsTask
+ *
+ * @method     ~FindFactorsTask
+ *
+ * @date       2016-01-15
+ *
+ * @revision   none
+ *
+ * @designer   Eric Tsang
+ *
+ * @programmer Eric Tsang
+ *
+ * @note
+ *
+ * when this object is destroyed, all the objects in its results vector are also
+ *   destroyed.
+ *
+ * @signature  FindFactorsTask::~FindFactorsTask()
+ */
 FindFactorsTask::~FindFactorsTask()
 {
     mpz_clear(upperBound);
@@ -21,6 +96,31 @@ FindFactorsTask::~FindFactorsTask()
     }
 }
 
+/**
+ * computes all the factors for the number in this range, and places them into
+ *   its internal results vector which may be accessed through the get_results
+ *   method.
+ *
+ * @class      FindFactorsTask
+ *
+ * @method     execute
+ *
+ * @date       2016-01-15
+ *
+ * @revision   none
+ *
+ * @designer   Eric Tsang
+ *
+ * @programmer Eric Tsang
+ *
+ * @note
+ *
+ * the execute method should only be called once per instance of this class.
+ *   after the execute method returns, the results of this object will be
+ *   populated with factors of the passed number in the range it was to check.
+ *
+ * @signature  void FindFactorsTask::execute()
+ */
 void FindFactorsTask::execute()
 {
     // declare, allocate and initialize variables
@@ -55,6 +155,35 @@ void FindFactorsTask::execute()
     mpz_clear(zero);
 }
 
+/**
+ * returns the results vector of this task object.
+ *
+ * @class      FindFactorsTask
+ *
+ * @method     get_results
+ *
+ * @date       2016-01-15
+ *
+ * @revision   none
+ *
+ * @designer   Eric Tsang
+ *
+ * @programmer Eric Tsang
+ *
+ * @note
+ *
+ * when this object is first created, the results vector will be empty.
+ *
+ * when this object is destroyed, all the objects in its results vector are also
+ *   destroyed; they should not be dereferenced after the task object is
+ *   destroyed.
+ *
+ * @signature  std::vector<mpz_t*>* FindFactorsTask::get_results()
+ *
+ * @return     the results vector of this task object. it contains the all
+ *   factors of the specified number that is within the specified range after
+ *   execute has been called.
+ */
 std::vector<mpz_t*>* FindFactorsTask::get_results()
 {
     return &results;
