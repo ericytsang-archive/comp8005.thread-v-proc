@@ -21,13 +21,14 @@
  *
  * @note       none
  */
-o o()
 #include <poll.h>
+#include <fcntl.h>
 #include <errno.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <signal.h>
 #include <algorithm>
+#include <sys/stat.h>
 #include <sys/wait.h>
 #include <sys/time.h>
 #include <sys/mman.h>
@@ -89,12 +90,12 @@ sem_t* feedbackLock = (sem_t*) mmap(0,sizeof(sem_t),PROT_READ|PROT_WRITE,MAP_SHA
 /**
  * file descriptor for reading from the task pipe.
  */
-FILE* taskOut = {0};
+FILE* taskPipeOut = {0};
 
 /**
  * file descriptor for writing into the feedback pipe.
  */
-FILE* feedbackIn = {0};
+FILE* feedbackPipeIn = {0};
 
 /**
  * entry point of the program.
@@ -125,12 +126,22 @@ FILE* feedbackIn = {0};
 int main(int argc,char** argv)
 {
     // parse command line arguments
-    if (argc != 2)
+    if (argc != 3)
     {
-        fprintf(stderr,"usage: %s [integer]\n",argv[0]);
+        fprintf(stderr,"usage: %s [integer] [path to log file]\n",argv[0]);
         return 1;
     }
-    mpz_set_str(prime.value,argv[1],10);
+    if(mpz_set_str(prime.value,argv[1],10) == -1)
+    {
+        fprintf(stderr,"usage: %s [integer] [path to log file]\n",argv[0]);
+        return 1;
+    }
+    int logfile;
+    if((logfile = open(argv[2],O_WRONLY|O_TRUNC)) == -1)
+    {
+        fprintf(stderr,"usage: %s [integer] [path to log file]\n",argv[0]);
+        return 1;
+    }
 
     // create all synchronization primitives, data structures needed to store
     // results, tasks, and execution statistics
@@ -180,10 +191,11 @@ int main(int argc,char** argv)
     signal(SIGUSR1,read_feedback_pipe);
 
     // get stream references to file descriptors
-    taskOut = fdopen(tasks[1],"w");
-    feedbackIn = fdopen(feedback[0],"r");
+    taskPipeOut = fdopen(tasks[1],"w");
+    feedbackPipeIn = fdopen(feedback[0],"r");
+    logFileOut = fdopen(logfile,"r");
 
-    if (taskOut == 0 || feedbackIn == 0)
+    if (taskPipeOut == 0 || feedbackPipeIn == 0)
     {
         perror("failed on fdopen");
         return 1;
@@ -206,17 +218,18 @@ int main(int argc,char** argv)
             mpz_div(percentageComplete.value,tempLoBound.value,prime.value);
             if (mpz_cmp(prevPercentageComplete.value,percentageComplete.value) != 0)
             {
-                gmp_fprintf(stderr,"%Zd%\n",percentageComplete.value);
+                gmp_fprintf(stdout,"%Zd%\n",percentageComplete.value);
+                gmp_fprintf(logFileOut,"%Zd%\n",percentageComplete.value);
             }
 
             // write the loBound into the task pipe
             sem_wait(tasksNotFullSem);
-            if (!mpz_out_raw(taskOut,loBound.value))
+            if (!mpz_out_raw(taskPipeOut,loBound.value))
             {
                 perror("failed to write to pipe");
                 return 1;
             }
-            fflush(taskOut);
+            fflush(taskPipeOut);
         }
 
         close(tasks[1]);
@@ -234,6 +247,26 @@ int main(int argc,char** argv)
     // read in any remaining results
     read_feedback_pipe(SIGUSR1);
 
+    // print out calculation results
+    std::sort(results.begin(),results.end(),[](Number* i,Number* j)
+    {
+        return mpz_cmp(i->value,j->value) < 0;
+    });
+    fprintf(stdout,"factors: ");
+    fprintf(logFileOut,"factors: ");
+    for(register unsigned int i = 0; i < results.size(); ++i)
+    {
+        gmp_fprintf(stdout,"%s%Zd",i?", ":"",results[i]);
+        gmp_fprintf(logFileOut,"%s%Zd",i?", ":"",results[i]);
+        delete results[i];
+    }
+    fprintf(stdout,"\n");
+    fprintf(logFileOut,"\n");
+
+    // print out execution results
+    fprintf(stdout,"total runtime: %lums\n",endTime-startTime);
+    fprintf(logFileOut,"total runtime: %lums\n",endTime-startTime);
+
     // clean up remaining system resources
     sem_destroy(tasksLock);
     sem_destroy(tasksNotFullSem);
@@ -245,21 +278,7 @@ int main(int argc,char** argv)
 
     close(feedback[0]);
 
-    // print out calculation results
-    std::sort(results.begin(),results.end(),[](Number* i,Number* j)
-    {
-        return mpz_cmp(i->value,j->value) < 0;
-    });
-    printf("factors: ");
-    for(register unsigned int i = 0; i < results.size(); ++i)
-    {
-        gmp_printf("%s%Zd",i?", ":"",results[i]);
-        delete results[i];
-    }
-    printf("\n");
-
-    // print out execution results
-    printf("total runtime: %lums\n",endTime-startTime);
+    close(logfile);
 
     return 0;
 }
@@ -294,7 +313,7 @@ void read_feedback_pipe(int)
     while(poll(&pollParams,1,0) == 1)
     {
         Number* result = new Number();
-        if (!mpz_inp_raw(result->value,feedbackIn))
+        if (!mpz_inp_raw(result->value,feedbackPipeIn))
         {
             if (errno) perror("failed on read");
             break;
