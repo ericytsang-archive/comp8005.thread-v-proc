@@ -67,7 +67,7 @@ Lock::Lock(sem_t* _sem):sem(_sem)
  *
  * @note       none
  *
- * @signature  ~Lock()
+ * @signature  Lock::~Lock()
  */
 Lock::~Lock()
 {

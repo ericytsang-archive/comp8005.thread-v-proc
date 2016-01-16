@@ -42,7 +42,7 @@
  *
  * initializes the internal gnp integer upon construction.
  *
- * @signature  Number()
+ * @signature  Number::Number()
  *
  * @return     an instance of the Number class.
  */
@@ -70,7 +70,7 @@ Number::Number()
  *
  * clears the internal gnp integer upon destruction.
  *
- * @signature  ~Number()
+ * @signature  Number::~Number()
  */
 Number::~Number()
 {

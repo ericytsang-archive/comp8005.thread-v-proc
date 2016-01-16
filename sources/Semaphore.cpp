@@ -40,7 +40,7 @@
  *
  * @note       none
  *
- * @signature  Semaphore(bool betweenProcesses,int permits)
+ * @signature  Semaphore::Semaphore(bool betweenProcesses,int permits)
  *
  * @param      betweenProcesses true if the semaphore is to be shared between
  *   processes; false if the semaphore is only to be shared between threads of
@@ -71,7 +71,7 @@ Semaphore::Semaphore(bool betweenProcesses,int permits)
  *
  * @note       none
  *
- * @signature  ~Semaphore()
+ * @signature  Semaphore::~Semaphore()
  */
 Semaphore::~Semaphore()
 {
@@ -96,7 +96,7 @@ Semaphore::~Semaphore()
  *
  * @note       none
  *
- * @signature  post()
+ * @signature  void Semaphore::post
  */
 void Semaphore::post()
 {
@@ -121,7 +121,7 @@ void Semaphore::post()
  *
  * @note       none
  *
- * @signature  wait()
+ * @signature  void Semaphore::wait()
  */
 void Semaphore::wait()
 {
