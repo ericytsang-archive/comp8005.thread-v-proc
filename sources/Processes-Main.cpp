@@ -19,20 +19,57 @@
 int main(int,char**);
 long current_timestamp();
 int worker_process();
-void sigusr1_handler(int sigNum);
+void read_feedback_pipe(int sigNum);
 
+/**
+ * number to find all the factors of.
+ */
 Number prime;
 
+/**
+ * vector of calculation results read from the feedback pipe.
+ */
 std::vector<Number*> results;
 
+/**
+ * pipe. contains tasks from parent, consumed by children.
+ */
 int tasks[2];
+
+/**
+ * pipe. contains calculation results from children, read by parent.
+ */
 int feedback[2];
 
-sem_t* tasksLock = 0;
-sem_t* tasksNotFullSem = 0;
-sem_t* feedbackLock = 0;
+/**
+ * pointer to a sem_t sized shared memory where a semaphore will be allocated
+ *   onto. used by children to ensure mutual access when reading from the task
+ *   pipe.
+ */
+sem_t* tasksLock = (sem_t*) mmap(0,sizeof(sem_t),PROT_READ|PROT_WRITE,MAP_SHARED|MAP_ANONYMOUS,-1,0);;
 
+/**
+ * pointer to a sem_t sized shared memory where a semaphore will be allocated
+ *   onto. used by processes to ensure that there can only be
+ *   MAX_NUMBERS_PER_TASK serialized tasks in the task pipe at a time.
+ */
+sem_t* tasksNotFullSem = (sem_t*) mmap(0,sizeof(sem_t),PROT_READ|PROT_WRITE,MAP_SHARED|MAP_ANONYMOUS,-1,0);;
+
+/**
+ * pointer to a sem_t sized shared memory where a semaphore will be allocated
+ *   onto. used by children to ensure mutual access when writing into the
+ *   feedback pipe.
+ */
+sem_t* feedbackLock = (sem_t*) mmap(0,sizeof(sem_t),PROT_READ|PROT_WRITE,MAP_SHARED|MAP_ANONYMOUS,-1,0);;
+
+/**
+ * file descriptor for reading from the task pipe.
+ */
 FILE* taskOut = {0};
+
+/**
+ * file descriptor for writing into the feedback pipe.
+ */
 FILE* feedbackIn = {0};
 
 int main(int argc,char** argv)
@@ -47,15 +84,12 @@ int main(int argc,char** argv)
 
     // create all synchronization primitives, data structures needed to store
     // results, tasks, and execution statistics
-    if (pipe(tasks) < 0 || pipe(feedback) < 0)
+    if (pipe(tasks) < 0 ||
+        pipe(feedback) < 0)
     {
-        perror("failed to create pipe");
+        perror("pipe");
         return 1;
     }
-
-    tasksLock = (sem_t*) mmap(0,sizeof(sem_t),PROT_READ|PROT_WRITE,MAP_SHARED|MAP_ANONYMOUS,-1,0);
-    tasksNotFullSem = (sem_t*) mmap(0,sizeof(sem_t),PROT_READ|PROT_WRITE,MAP_SHARED|MAP_ANONYMOUS,-1,0);
-    feedbackLock = (sem_t*) mmap(0,sizeof(sem_t),PROT_READ|PROT_WRITE,MAP_SHARED|MAP_ANONYMOUS,-1,0);
 
     if (tasksLock == MAP_FAILED ||
         tasksNotFullSem == MAP_FAILED ||
@@ -81,16 +115,19 @@ int main(int argc,char** argv)
     {
         if (!fork())
         {
+            // child process
             return worker_process();
         }
     }
+
+    // parent process
 
     // close unused pipe descriptors
     close(tasks[0]);
     close(feedback[1]);
 
     // setup signal handlers
-    signal(SIGUSR1,sigusr1_handler);
+    signal(SIGUSR1,read_feedback_pipe);
 
     // get stream references to file descriptors
     taskOut = fdopen(tasks[1],"w");
@@ -145,9 +182,9 @@ int main(int argc,char** argv)
     long endTime = current_timestamp();
 
     // read in any remaining results
-    sigusr1_handler(SIGUSR1);
+    read_feedback_pipe(SIGUSR1);
 
-    // clean up system resources
+    // clean up remaining system resources
     sem_destroy(tasksLock);
     sem_destroy(tasksNotFullSem);
     sem_destroy(feedbackLock);
@@ -177,7 +214,7 @@ int main(int argc,char** argv)
     return 0;
 }
 
-void sigusr1_handler(int)
+void read_feedback_pipe(int)
 {
     // read all results from feedback pipe, and put into results vector
     pollfd pollParams;
