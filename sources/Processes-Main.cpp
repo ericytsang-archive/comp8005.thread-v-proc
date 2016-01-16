@@ -1,3 +1,27 @@
+/**
+ * the process version of the program.
+ *
+ * usage: ./Processes-Main [integer] [log file]
+ *
+ * finds all the factors of the passed integer.
+ *
+ * anything that is printed to stdout is also printed to the specified file.
+ *
+ * @sourceFile Processes-Main.cpp
+ *
+ * @program    Processes-Main.out
+ *
+ * @date       2016-01-15
+ *
+ * @revision   none
+ *
+ * @designer   Eric Tsang
+ *
+ * @programmer Eric Tsang
+ *
+ * @note       none
+ */
+o o()
 #include <poll.h>
 #include <errno.h>
 #include <stdio.h>
@@ -72,6 +96,32 @@ FILE* taskOut = {0};
  */
 FILE* feedbackIn = {0};
 
+/**
+ * entry point of the program.
+ *
+ * @function   main
+ *
+ * @date       2016-01-15
+ *
+ * @revision   none
+ *
+ * @designer   Eric Tsang
+ *
+ * @programmer Eric Tsang
+ *
+ * @note
+ *
+ * sets up IPC, spawns children, generates tasks for children, received results
+ *   from children, waits for children to terminate, writes results to a file,
+ *   and stdout.
+ *
+ * @signature  int main(int argc,char** argv)
+ *
+ * @param      argc number of command line arguments
+ * @param      argv array of c strings of command line arguments
+ *
+ * @return     status code.
+ */
 int main(int argc,char** argv)
 {
     // parse command line arguments
@@ -214,6 +264,26 @@ int main(int argc,char** argv)
     return 0;
 }
 
+/**
+ * SIGUSR1 handler. reads all the results from the feedback pipe, and places
+ *   them into the results vector.
+ *
+ * @method     read_feedback_pipe
+ *
+ * @date       2016-01-15
+ *
+ * @revision   none
+ *
+ * @designer   Eric Tsang
+ *
+ * @programmer Eric Tsang
+ *
+ * @note       none
+ *
+ * @signature  void read_feedback_pipe(int)
+ *
+ * @param      int unused
+ */
 void read_feedback_pipe(int)
 {
     // read all results from feedback pipe, and put into results vector
@@ -234,6 +304,31 @@ void read_feedback_pipe(int)
     }
 }
 
+/**
+ * function that is executed on the child process.
+ *
+ * @function   worker_process
+ *
+ * @date       2016-01-15
+ *
+ * @revision   none
+ *
+ * @designer   Eric Tsang
+ *
+ * @programmer Eric Tsang
+ *
+ * @note
+ *
+ * continuously reads tasks from the task pipe, executes them, and writes the
+ *   results to the feedback pipe for the parent to receive.
+ *
+ * once task pipe is emptied, and the child gets an EOF exception when reading
+ *   from it, the child will release all of its system resources, and terminate.
+ *
+ * @signature  int worker_process()
+ *
+ * @return     status code.
+ */
 int worker_process()
 {
     // close unused pipe descriptors
@@ -311,9 +406,28 @@ int worker_process()
     return 0;
 }
 
+/**
+ * returns the current system time in milliseconds.
+ *
+ * @function   current_timestamp
+ *
+ * @date       2016-01-15
+ *
+ * @revision   none
+ *
+ * @designer   Eric Tsang
+ *
+ * @programmer Eric Tsang
+ *
+ * @note       none
+ *
+ * @signature  long current_timestamp()
+ *
+ * @return     current system time in milliseconds.
+ */
 long current_timestamp()
 {
     struct timeval te;
-    gettimeofday(&te, NULL); // get current time
-    return te.tv_sec*1000L + te.tv_usec/1000; // caculate milliseconds
+    gettimeofday(&te,0);
+    return te.tv_sec*1000L + te.tv_usec/1000;
 }
