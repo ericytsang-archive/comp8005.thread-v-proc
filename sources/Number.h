@@ -27,8 +27,8 @@
 class Number
 {
 public:
-    Number()
-    ~Number()
+    Number();
+    ~Number();
     mpz_t value;
 };
 

@@ -10,17 +10,17 @@ clean:
 
 
 # executables
-Processes-Main: Processes-Main.o FindFactorsTask.o Lock.o
-	$(CC) -o ./Processes-Main.out Processes-Main.o FindFactorsTask.o Lock.o $(LIBS)
+Processes-Main: Processes-Main.o FindFactorsTask.o Lock.o Number.o
+	$(CC) -o ./Processes-Main.out Processes-Main.o FindFactorsTask.o Lock.o Number.o $(LIBS)
 
-Threads-Main: Threads-Main.o FindFactorsTask.o Lock.o Semaphore.o
-	$(CC) -o ./Threads-Main.out Threads-Main.o FindFactorsTask.o Lock.o Semaphore.o $(LIBS)
+Threads-Main: Threads-Main.o FindFactorsTask.o Lock.o Semaphore.o Number.o
+	$(CC) -o ./Threads-Main.out Threads-Main.o FindFactorsTask.o Lock.o Semaphore.o Number.o $(LIBS)
 
-FindFactorsTaskTest: FindFactorsTaskTest.o FindFactorsTask.o
-	$(CC) -o ./FindFactorsTaskTest.out FindFactorsTaskTest.o FindFactorsTask.o $(LIBS)
+FindFactorsTaskTest: FindFactorsTaskTest.o FindFactorsTask.o Number.o
+	$(CC) -o ./FindFactorsTaskTest.out FindFactorsTaskTest.o FindFactorsTask.o Number.o $(LIBS)
 
-NumberTest: NumberTest.o
-	$(CC) -o ./NumberTest.out NumberTest.o $(LIBS)
+NumberTest: NumberTest.o Number.o
+	$(CC) -o ./NumberTest.out NumberTest.o Number.o $(LIBS)
 
 # files
 Threads-Main.o: Threads-Main.cpp

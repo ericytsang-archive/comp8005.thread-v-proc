@@ -46,21 +46,21 @@ int feedback[2];
  *   onto. used by children to ensure mutual access when reading from the task
  *   pipe.
  */
-sem_t* tasksLock = (sem_t*) mmap(0,sizeof(sem_t),PROT_READ|PROT_WRITE,MAP_SHARED|MAP_ANONYMOUS,-1,0);;
+sem_t* tasksLock = (sem_t*) mmap(0,sizeof(sem_t),PROT_READ|PROT_WRITE,MAP_SHARED|MAP_ANONYMOUS,-1,0);
 
 /**
  * pointer to a sem_t sized shared memory where a semaphore will be allocated
  *   onto. used by processes to ensure that there can only be
  *   MAX_NUMBERS_PER_TASK serialized tasks in the task pipe at a time.
  */
-sem_t* tasksNotFullSem = (sem_t*) mmap(0,sizeof(sem_t),PROT_READ|PROT_WRITE,MAP_SHARED|MAP_ANONYMOUS,-1,0);;
+sem_t* tasksNotFullSem = (sem_t*) mmap(0,sizeof(sem_t),PROT_READ|PROT_WRITE,MAP_SHARED|MAP_ANONYMOUS,-1,0);
 
 /**
  * pointer to a sem_t sized shared memory where a semaphore will be allocated
  *   onto. used by children to ensure mutual access when writing into the
  *   feedback pipe.
  */
-sem_t* feedbackLock = (sem_t*) mmap(0,sizeof(sem_t),PROT_READ|PROT_WRITE,MAP_SHARED|MAP_ANONYMOUS,-1,0);;
+sem_t* feedbackLock = (sem_t*) mmap(0,sizeof(sem_t),PROT_READ|PROT_WRITE,MAP_SHARED|MAP_ANONYMOUS,-1,0);
 
 /**
  * file descriptor for reading from the task pipe.
