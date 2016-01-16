@@ -136,10 +136,11 @@ int main(int argc,char** argv)
         fprintf(stderr,"usage: %s [integer] [path to log file]\n",argv[0]);
         return 1;
     }
-    int logfile;
-    if((logfile = open(argv[2],O_WRONLY|O_TRUNC)) == -1)
+    int logfile = open(argv[2],O_CREAT|O_WRONLY|O_APPEND);
+    if(logfile == -1 || errno)
     {
-        fprintf(stderr,"usage: %s [integer] [path to log file]\n",argv[0]);
+        fprintf(stderr,"usage: %s [integer] [path to log file]\nerror occurred: ",argv[0]);
+        perror(0);
         return 1;
     }
 
@@ -193,9 +194,11 @@ int main(int argc,char** argv)
     // get stream references to file descriptors
     taskPipeOut = fdopen(tasks[1],"w");
     feedbackPipeIn = fdopen(feedback[0],"r");
-    logFileOut = fdopen(logfile,"r");
+    FILE* logFileOut = fdopen(logfile,"w");
 
-    if (taskPipeOut == 0 || feedbackPipeIn == 0)
+    if (!taskPipeOut ||
+        !feedbackPipeIn ||
+        !logFileOut)
     {
         perror("failed on fdopen");
         return 1;
@@ -266,6 +269,7 @@ int main(int argc,char** argv)
     // print out execution results
     fprintf(stdout,"total runtime: %lums\n",endTime-startTime);
     fprintf(logFileOut,"total runtime: %lums\n",endTime-startTime);
+    fflush(logFileOut);
 
     // clean up remaining system resources
     sem_destroy(tasksLock);
