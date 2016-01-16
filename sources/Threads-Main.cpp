@@ -200,6 +200,7 @@ int main(int argc,char** argv)
     // print out execution results
     fprintf(stdout,"total runtime: %lums\n",endTime-startTime);
     fprintf(logFileOut,"total runtime: %lums\n",endTime-startTime);
+    fflush(logFileOut);
 
     // release system resources
     close(logfile);
