@@ -1,3 +1,26 @@
+/**
+ * the threaded version of the program.
+ *
+ * usage: ./Threads-Main [integer] [log file]
+ *
+ * finds all the factors of the passed integer.
+ *
+ * anything that is printed to stdout is also printed to the specified file.
+ *
+ * @sourceFile Threads-Main.cpp
+ *
+ * @program    Threads-Main.out
+ *
+ * @date       2016-01-15
+ *
+ * @revision   none
+ *
+ * @designer   Eric Tsang
+ *
+ * @programmer Eric Tsang
+ *
+ * @note       none
+ */
 #include <vector>
 #include <fcntl.h>
 #include <stdio.h>
@@ -19,16 +42,72 @@ long current_timestamp();
 void* worker_routine(void*);
 int main(int,char**);
 
+/**
+ * number to find all the factors of.
+ */
 Number prime;
 
+/**
+ * vector used to store all the serialized tasks produced by the main thread,
+ *   and consumed by worker threads.
+ */
 std::vector<Number*> tasks;
+
+/**
+ * vector used to store all the results tasks produced by the worker threads,
+ *   and consumed by main thread.
+ */
 std::vector<Number*> results;
+
+/**
+ * set to true once all tasks have been produced by the main thread, so worker
+ *   threads know that there are no more tasks to consume once the tasks vector
+ *   is empty, and this flag is set to true.
+ */
 bool allTasksProduced = false;
 
+/**
+ * mutex used to ensure mutual access to the tasks vector.
+ */
 Semaphore taskAccess(false,1);
+
+/**
+ * mutex used to ensure that there is only a maximum of MAX_PENDING_TASKS tasks
+ *   in the tasks vector at any time.
+ */
 Semaphore tasksNotFullSem(false,MAX_PENDING_TASKS);
+
+/**
+ * mutex used to ensure mutual access to the results vector.
+ */
 Semaphore resultAccess(false,1);
 
+/**
+ * entry point of the program.
+ *
+ * @function   main
+ *
+ * @date       2016-01-15
+ *
+ * @revision   none
+ *
+ * @designer   Eric Tsang
+ *
+ * @programmer Eric Tsang
+ *
+ * @note
+ *
+ * sets up synchronization primitives, spawns worker threads, generates tasks
+ *   for workers, receives results from workers, waits for workers to terminate,
+ *   writes results to a file, and stdout.
+ *
+ * @signature  int main(int argc,char** argv)
+ *
+ * @param      argc number of command line arguments
+ * @param      argv array of c strings of command line arguments
+ *
+ * @return     status code.
+ */
 int main(int argc,char** argv)
 {
     // parse command line arguments
@@ -128,6 +207,28 @@ int main(int argc,char** argv)
     return 0;
 }
 
+/**
+ * routine executed by worker threads.
+ *
+ * @function   worker_routine
+ *
+ * @date       2016-01-15
+ *
+ * @revision   none
+ *
+ * @designer   Eric Tsang
+ *
+ * @programmer Eric Tsang
+ *
+ * @note
+ *
+ * continuously reads tasks from the tasks vector, executes them, and writes the
+ *   results to the results pipe for the parent to receive.
+ *
+ * once there are no more tasks to execute, the thread terminates.
+ *
+ * @signature  void* worker_routine(void*)
+ */
 void* worker_routine(void*)
 {
     bool yield = false;
@@ -201,6 +302,25 @@ void* worker_routine(void*)
     pthread_exit(0);
 }
 
+/**
+ * returns the current system time in milliseconds.
+ *
+ * @function   current_timestamp
+ *
+ * @date       2016-01-15
+ *
+ * @revision   none
+ *
+ * @designer   Eric Tsang
+ *
+ * @programmer Eric Tsang
+ *
+ * @note       none
+ *
+ * @signature  long current_timestamp()
+ *
+ * @return     current system time in milliseconds.
+ */
 long current_timestamp()
 {
     struct timeval te;

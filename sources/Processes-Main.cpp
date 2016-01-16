@@ -112,7 +112,7 @@ FILE* feedbackPipeIn = {0};
  *
  * @note
  *
- * sets up IPC, spawns children, generates tasks for children, received results
+ * sets up IPC, spawns children, generates tasks for children, receives results
  *   from children, waits for children to terminate, writes results to a file,
  *   and stdout.
  *
