@@ -190,8 +190,8 @@ int main(int argc,char** argv)
     fprintf(logFileOut,"factors: ");
     for(register unsigned int i = 0; i < results.size(); ++i)
     {
-        gmp_fprintf(stdout,"%s%Zd",i?", ":"",results[i]);
-        gmp_fprintf(logFileOut,"%s%Zd",i?", ":"",results[i]);
+        gmp_fprintf(stdout,"%s%Zd",i?", ":"",results[i]->value);
+        gmp_fprintf(logFileOut,"%s%Zd",i?", ":"",results[i]->value);
         delete results[i];
     }
     fprintf(stdout,"\n");
@@ -200,9 +200,9 @@ int main(int argc,char** argv)
     // print out execution results
     fprintf(stdout,"total runtime: %lums\n",endTime-startTime);
     fprintf(logFileOut,"total runtime: %lums\n",endTime-startTime);
-    fflush(logFileOut);
 
     // release system resources
+    fclose(logFileOut);
     close(logfile);
 
     return 0;

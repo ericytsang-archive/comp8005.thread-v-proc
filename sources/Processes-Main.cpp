@@ -259,8 +259,8 @@ int main(int argc,char** argv)
     fprintf(logFileOut,"factors: ");
     for(register unsigned int i = 0; i < results.size(); ++i)
     {
-        gmp_fprintf(stdout,"%s%Zd",i?", ":"",results[i]);
-        gmp_fprintf(logFileOut,"%s%Zd",i?", ":"",results[i]);
+        gmp_fprintf(stdout,"%s%Zd",i?", ":"",results[i]->value);
+        gmp_fprintf(logFileOut,"%s%Zd",i?", ":"",results[i]->value);
         delete results[i];
     }
     fprintf(stdout,"\n");
@@ -269,9 +269,12 @@ int main(int argc,char** argv)
     // print out execution results
     fprintf(stdout,"total runtime: %lums\n",endTime-startTime);
     fprintf(logFileOut,"total runtime: %lums\n",endTime-startTime);
-    fflush(logFileOut);
 
     // clean up remaining system resources
+    fclose(logFileOut);
+    fclose(taskPipeOut);
+    fclose(feedbackPipeIn);
+
     sem_destroy(tasksLock);
     sem_destroy(tasksNotFullSem);
     sem_destroy(feedbackLock);
@@ -309,6 +312,8 @@ int main(int argc,char** argv)
  */
 void read_feedback_pipe(int)
 {
+    Lock scopelock(feedbackLock);
+
     // read all results from feedback pipe, and put into results vector
     pollfd pollParams;
     pollParams.fd = feedback[0];
@@ -320,6 +325,7 @@ void read_feedback_pipe(int)
         if (!mpz_inp_raw(result->value,feedbackPipeIn))
         {
             if (errno) perror("failed on read");
+            delete result;
             break;
         }
 
@@ -383,7 +389,7 @@ int worker_process()
                 if (!mpz_inp_raw(loBound.value,taskIn))
                 {
                     sem_post(tasksNotFullSem);
-                    return 0;
+                    break;
                 }
             }
             sem_post(tasksNotFullSem);
@@ -422,6 +428,9 @@ int worker_process()
 
         delete taskPtr;
     }
+
+    fclose(taskIn);
+    fclose(feedbackOut);
 
     close(tasks[0]);
     close(feedback[1]);
