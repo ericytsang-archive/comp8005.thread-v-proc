@@ -1,7 +1,10 @@
 #include <vector>
+#include <fcntl.h>
 #include <stdio.h>
+#include <unistd.h>
 #include <pthread.h>
 #include <algorithm>
+#include <sys/stat.h>
 #include <sys/time.h>
 #include "Lock.h"
 #include "Number.h"
@@ -29,12 +32,24 @@ Semaphore resultAccess(false,1);
 int main(int argc,char** argv)
 {
     // parse command line arguments
-    if (argc != 2)
+    if (argc != 3)
     {
-        fprintf(stderr,"usage: %s [integer]\n",argv[0]);
+        fprintf(stderr,"usage: %s [integer] [path to log file]\n",argv[0]);
         return 1;
     }
-    mpz_set_str(prime.value,argv[1],10);
+    if(mpz_set_str(prime.value,argv[1],10) == -1)
+    {
+        fprintf(stderr,"usage: %s [integer] [path to log file]\n",argv[0]);
+        return 1;
+    }
+    int logfile = open(argv[2],O_CREAT|O_WRONLY|O_APPEND);
+    FILE* logFileOut = fdopen(logfile,"w");
+    if(logfile == -1 || errno)
+    {
+        fprintf(stderr,"usage: %s [integer] [path to log file]\nerror occurred: ",argv[0]);
+        perror(0);
+        return 1;
+    }
 
     // get start time
     long startTime = current_timestamp();
@@ -63,7 +78,8 @@ int main(int argc,char** argv)
             mpz_div(percentageComplete.value,tempLoBound.value,prime.value);
             if(mpz_cmp(prevPercentageComplete.value,percentageComplete.value) != 0)
             {
-                gmp_printf("%Zd%\n",percentageComplete.value);
+                gmp_fprintf(stdout,"%Zd%\n",percentageComplete.value);
+                gmp_fprintf(logFileOut,"%Zd%\n",percentageComplete.value);
             }
 
             // insert the task into the task queue once there is room
@@ -91,16 +107,23 @@ int main(int argc,char** argv)
     {
         return mpz_cmp(i->value,j->value) < 0;
     });
-    printf("factors: ");
+    fprintf(stdout,"factors: ");
+    fprintf(logFileOut,"factors: ");
     for(register unsigned int i = 0; i < results.size(); ++i)
     {
-        gmp_printf("%s%Zd",i?", ":"",results[i]);
+        gmp_fprintf(stdout,"%s%Zd",i?", ":"",results[i]);
+        gmp_fprintf(logFileOut,"%s%Zd",i?", ":"",results[i]);
         delete results[i];
     }
-    printf("\n");
+    fprintf(stdout,"\n");
+    fprintf(logFileOut,"\n");
 
     // print out execution results
-    printf("total runtime: %lums\n",endTime-startTime);
+    fprintf(stdout,"total runtime: %lums\n",endTime-startTime);
+    fprintf(logFileOut,"total runtime: %lums\n",endTime-startTime);
+
+    // release system resources
+    close(logfile);
 
     return 0;
 }
