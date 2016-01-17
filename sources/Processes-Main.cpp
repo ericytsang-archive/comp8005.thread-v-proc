@@ -38,7 +38,7 @@
 #include "Semaphore.h"
 #include "FindFactorsTask.h"
 
-#define NUM_WORKERS 4
+#define MAX_PENDING_TASKS_PER_WORKER 10
 #define MAX_NUMBERS_PER_TASK 10000
 
 int main(int,char**);
@@ -126,21 +126,27 @@ FILE* feedbackPipeIn = {0};
 int main(int argc,char** argv)
 {
     // parse command line arguments
-    if (argc != 3)
+    if (argc != 4)
     {
-        fprintf(stderr,"usage: %s [integer] [path to log file]\n",argv[0]);
+        fprintf(stderr,"usage: %s [integer] [path to log file] [num workers]\n",argv[0]);
         return 1;
     }
     if(mpz_set_str(prime.value,argv[1],10) == -1)
     {
-        fprintf(stderr,"usage: %s [integer] [path to log file]\n",argv[0]);
+        fprintf(stderr,"usage: %s [integer] [path to log file] [num workers]\n",argv[0]);
         return 1;
     }
     int logfile = open(argv[2],O_CREAT|O_WRONLY|O_APPEND);
     if(logfile == -1 || errno)
     {
-        fprintf(stderr,"usage: %s [integer] [path to log file]\nerror occurred: ",argv[0]);
+        fprintf(stderr,"usage: %s [integer] [path to log file] [num workers]\nerror occurred: ",argv[0]);
         perror(0);
+        return 1;
+    }
+    unsigned int numWorkers = atoi(argv[3]);
+    if (numWorkers <= 0)
+    {
+        fprintf(stderr,"usage: %s [integer] [path to log file] [num workers]\n",argv[0]);
         return 1;
     }
 
@@ -162,7 +168,7 @@ int main(int argc,char** argv)
     }
 
     if (sem_init(tasksLock,1,1) < 0 ||
-        sem_init(tasksNotFullSem,1,NUM_WORKERS*10) < 0 ||
+        sem_init(tasksNotFullSem,1,numWorkers*MAX_PENDING_TASKS_PER_WORKER) < 0 ||
         sem_init(feedbackLock,1,1) < 0)
     {
         perror("sem_init");
@@ -173,7 +179,7 @@ int main(int argc,char** argv)
     long startTime = current_timestamp();
 
     // create the worker processes
-    for(register unsigned int i = 0; i < NUM_WORKERS; ++i)
+    for(register unsigned int i = 0; i < numWorkers; ++i)
     {
         if (!fork())
         {
@@ -239,7 +245,7 @@ int main(int argc,char** argv)
     }
 
     // join all child processes
-    for(register unsigned int i = 0; i < NUM_WORKERS; ++i)
+    for(register unsigned int i = 0; i < numWorkers; ++i)
     {
         wait(0);
     }

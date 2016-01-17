@@ -34,8 +34,7 @@
 #include "Semaphore.h"
 #include "FindFactorsTask.h"
 
-#define NUM_WORKERS 4
-#define MAX_PENDING_TASKS 100
+#define MAX_PENDING_TASKS_PER_WORKER 10
 #define MAX_NUMBERS_PER_TASK 10000
 
 long current_timestamp();
@@ -75,7 +74,7 @@ Semaphore taskAccess(false,1);
  * mutex used to ensure that there is only a maximum of MAX_PENDING_TASKS tasks
  *   in the tasks vector at any time.
  */
-Semaphore tasksNotFullSem(false,MAX_PENDING_TASKS);
+Semaphore tasksNotFullSem(false,0);
 
 /**
  * mutex used to ensure mutual access to the results vector.
@@ -111,33 +110,47 @@ Semaphore resultAccess(false,1);
 int main(int argc,char** argv)
 {
     // parse command line arguments
-    if (argc != 3)
+    if (argc != 4)
     {
-        fprintf(stderr,"usage: %s [integer] [path to log file]\n",argv[0]);
+        fprintf(stderr,"usage: %s [integer] [path to log file] [num workers]\n",argv[0]);
         return 1;
     }
     if(mpz_set_str(prime.value,argv[1],10) == -1)
     {
-        fprintf(stderr,"usage: %s [integer] [path to log file]\n",argv[0]);
+        fprintf(stderr,"usage: %s [integer] [path to log file] [num workers]\n",argv[0]);
         return 1;
     }
     int logfile = open(argv[2],O_CREAT|O_WRONLY|O_APPEND);
     FILE* logFileOut = fdopen(logfile,"w");
     if(logfile == -1 || errno)
     {
-        fprintf(stderr,"usage: %s [integer] [path to log file]\nerror occurred: ",argv[0]);
+        fprintf(stderr,"usage: %s [integer] [path to log file] [num workers]\nerror occurred: ",argv[0]);
         perror(0);
         return 1;
+    }
+    unsigned int numWorkers = atoi(argv[3]);
+    if (numWorkers <= 0)
+    {
+        fprintf(stderr,"usage: %s [integer] [path to log file] [num workers]\n num workers must be larger than or equal to 1",argv[0]);
+        return 1;
+    }
+
+    // set up synchronization primitives
+    for(register unsigned int i; i < numWorkers*MAX_PENDING_TASKS_PER_WORKER; ++i)
+    {
+        tasksNotFullSem.post();
     }
 
     // get start time
     long startTime = current_timestamp();
 
     // create the worker threads
-    pthread_t workers[NUM_WORKERS];
-    for(register unsigned int i = 0; i < NUM_WORKERS; ++i)
+    std::vector<pthread_t> workers;
+    for(register unsigned int i = 0; i < numWorkers; ++i)
     {
-        pthread_create(workers+i,0,worker_routine,0);
+        pthread_t worker;
+        pthread_create(&worker,0,worker_routine,0);
+        workers.push_back(worker);
     }
 
     // create tasks and place them into the tasks vector
@@ -172,7 +185,7 @@ int main(int argc,char** argv)
     allTasksProduced = true;
 
     // join all worker threads
-    for(register unsigned int i = 0; i < NUM_WORKERS; ++i)
+    for(register unsigned int i = 0; i < numWorkers; ++i)
     {
         void* unused;
         pthread_join(workers[i],&unused);
